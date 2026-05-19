@@ -1,46 +1,180 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/utils/supabase';
+import { Expense, GroupMember } from '@/types/expense';
 import { formatDate } from '@/utils/date';
-import { Expense } from '@/types/expense';
+import GroupSelector from './GroupSelector';
+import MemberSelector from './MemberSelector';
 
 interface ExpenseFormProps {
   selectedDate: Date;
   onAddExpense: (expense: Expense) => void;
+  user: any;
 }
 
-export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormProps) {
+export default function ExpenseForm({ selectedDate, onAddExpense, user }: ExpenseFormProps) {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [groupMembers, setGroupMembers] = useState<(GroupMember & { user: { id: string; email: string } })[]>([]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (selectedGroupId) {
+      fetchGroupMembers();
+    } else {
+      setGroupMembers([]);
+      setSelectedMemberIds([]);
+    }
+  }, [selectedGroupId]);
+
+  const fetchGroupMembers = async () => {
+    const { data, error } = await supabase
+      .from('group_members')
+      .select('*, user:users!user_id (id, email)')
+      .eq('group_id', selectedGroupId);
+
+    if (!error && data) {
+      setGroupMembers(data);
+      // Default: all members selected
+      setSelectedMemberIds(data.map(m => m.user_id));
+    }
+  };
+
+  const handleMemberToggle = (memberId: string) => {
+    setSelectedMemberIds(prev =>
+      prev.includes(memberId)
+        ? prev.filter(id => id !== memberId)
+        : [...prev, memberId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedMemberIds.length === groupMembers.length) {
+      setSelectedMemberIds([]);
+    } else {
+      setSelectedMemberIds(groupMembers.map(m => m.user_id));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || parseFloat(amount) <= 0) return;
 
-    const expense: Expense = {
-      id: Date.now().toString(),
+    if (!user) {
+      alert('请先登录');
+      return;
+    }
+
+    if (selectedGroupId && selectedMemberIds.length === 0) {
+      alert('请至少选择一位分摊成员');
+      return;
+    }
+
+    setLoading(true);
+
+    const expenseData = {
       date: formatDate(selectedDate),
       amount: parseFloat(amount),
       note,
-      createdAt: Date.now(),
+      user_id: user.id,
+      group_id: selectedGroupId || null,
+      payer_id: user.id,
     };
 
-    onAddExpense(expense);
+    // If group expense, create with splits
+    if (selectedGroupId && selectedMemberIds.length > 0) {
+      const splitAmount = Number((parseFloat(amount) / selectedMemberIds.length).toFixed(2));
+
+      // Insert expense
+      const { data: expenseResult, error: expenseError } = await supabase
+        .from('expenses')
+        .insert(expenseData)
+        .select()
+        .single();
+
+      if (expenseError) {
+        alert('添加失败：' + expenseError.message);
+        setLoading(false);
+        return;
+      }
+
+      // Create splits for each member
+      const splits = selectedMemberIds.map(memberId => ({
+        expense_id: expenseResult.id,
+        user_id: memberId,
+        amount: splitAmount,
+      }));
+
+      await supabase.from('expense_splits').insert(splits);
+
+      onAddExpense(expenseResult);
+    } else {
+      // Personal expense
+      const { data, error } = await supabase
+        .from('expenses')
+        .insert(expenseData)
+        .select()
+        .single();
+
+      if (error) {
+        alert('添加失败：' + error.message);
+      } else {
+        onAddExpense(data);
+      }
+    }
+
     setAmount('');
     setNote('');
+    setLoading(false);
   };
 
+  const splitAmount = selectedGroupId && selectedMemberIds.length > 0 && amount
+    ? (parseFloat(amount) / selectedMemberIds.length).toFixed(2)
+    : null;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="text-sm text-gray-500 mb-1">日期</div>
-        <div className="font-medium">{formatDate(selectedDate)}</div>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Date Display */}
+      <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'var(--color-cream)' }}>
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-vermilion)' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+        </div>
+        <div>
+          <p className="sidenote">记账日期</p>
+          <p className="font-medium">{formatDate(selectedDate)}</p>
+        </div>
       </div>
 
+      {/* Group Selector */}
+      <GroupSelector
+        userId={user.id}
+        selectedGroupId={selectedGroupId}
+        onSelectGroup={setSelectedGroupId}
+      />
+
+      {/* Member Selector - only show when group selected */}
+      {selectedGroupId && (
+        <MemberSelector
+          groupId={selectedGroupId}
+          selectedMemberIds={selectedMemberIds}
+          onMemberToggle={handleMemberToggle}
+          onSelectAll={handleSelectAll}
+        />
+      )}
+
+      {/* Amount Input */}
       <div>
-        <label className="block text-sm text-gray-500 mb-1">金额</label>
+        <label className="block sidenote mb-2">金额 (元)</label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">¥</span>
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl" style={{ color: 'var(--color-vermilion)' }}>¥</span>
           <input
             type="number"
             step="0.01"
@@ -48,27 +182,43 @@ export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormP
             value={amount}
             onChange={e => setAmount(e.target.value)}
             placeholder="0.00"
-            className="w-full pl-8 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="pl-10 pr-16 py-4 text-2xl font-semibold"
+            style={{
+              border: '2px solid var(--color-paper)',
+              background: 'var(--color-warm-white)'
+            }}
+          />
+        </div>
+        {splitAmount && (
+          <p className="sidenote mt-2">
+            每人应付 <span style={{ color: 'var(--color-vermilion)' }}>¥{splitAmount}</span>
+          </p>
+        )}
+      </div>
+
+      {/* Note Input */}
+      <div>
+        <label className="block sidenote mb-2">备注说明</label>
+        <div className="relative">
+          <input
+            type="text"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="午餐、交通、购物..."
+            className="py-3"
+            style={{ border: '2px solid var(--color-paper)' }}
           />
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm text-gray-500 mb-1">备注</label>
-        <input
-          type="text"
-          value={note}
-          onChange={e => setNote(e.target.value)}
-          placeholder="早餐、午餐..."
-          className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
+      {/* Submit Button */}
       <button
         type="submit"
-        className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
+        disabled={loading}
+        className="btn-primary w-full py-4 text-lg"
+        style={{ borderRadius: '8px' }}
       >
-        记一笔
+        {loading ? '提交中...' : '记一笔'}
       </button>
     </form>
   );

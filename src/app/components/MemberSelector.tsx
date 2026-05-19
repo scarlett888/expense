@@ -1,0 +1,87 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { supabase } from '@/utils/supabase';
+import { GroupMember as GroupMemberType } from '@/types/expense';
+
+interface MemberSelectorProps {
+  groupId: string;
+  selectedMemberIds: string[];
+  onMemberToggle: (memberId: string) => void;
+  onSelectAll: () => void;
+}
+
+export default function MemberSelector({ groupId, selectedMemberIds, onMemberToggle, onSelectAll }: MemberSelectorProps) {
+  const [members, setMembers] = useState<(GroupMemberType & { user: { id: string; email: string } })[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (groupId) {
+      fetchMembers();
+    }
+  }, [groupId]);
+
+  const fetchMembers = async () => {
+    const { data, error } = await supabase
+      .from('group_members')
+      .select(`
+        *,
+        user:users!user_id (id, email)
+      `)
+      .eq('group_id', groupId);
+
+    if (!error && data) {
+      setMembers(data);
+    }
+    setLoading(false);
+  };
+
+  if (loading || members.length === 0) {
+    return null;
+  }
+
+  const allSelected = members.every(m => selectedMemberIds.includes(m.user_id));
+
+  return (
+    <div className="mt-4 p-4 rounded-lg" style={{ background: 'var(--color-cream)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="sidenote">分摊成员（{selectedMemberIds.length}/{members.length}）</span>
+        <button
+          onClick={onSelectAll}
+          className="text-xs px-2 py-1 rounded"
+          style={{ background: 'var(--color-paper)', color: 'var(--color-ink-light)' }}
+        >
+          {allSelected ? '取消全选' : '全选'}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {members.map(member => {
+          const isSelected = selectedMemberIds.includes(member.user_id);
+          return (
+            <button
+              key={member.id}
+              onClick={() => onMemberToggle(member.user_id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-full transition-all ${
+                isSelected ? '' : 'opacity-50'
+              }`}
+              style={{
+                background: isSelected ? 'var(--color-vermilion)' : 'var(--color-warm-white)',
+                color: isSelected ? 'white' : 'var(--color-ink)',
+                border: `2px solid ${isSelected ? 'var(--color-vermilion)' : 'var(--color-paper)'}`
+              }}
+            >
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-xs"
+                style={{ background: isSelected ? 'rgba(255,255,255,0.2)' : 'var(--color-paper)' }}
+              >
+                {member.user?.email?.[0]?.toUpperCase() || '?'}
+              </div>
+              <span className="text-sm">{member.nickname || member.user?.email?.split('@')[0] || '成员'}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
