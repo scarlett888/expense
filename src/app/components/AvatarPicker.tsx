@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { supabase } from '@/utils/supabase';
 
 interface AvatarPickerProps {
@@ -39,20 +39,8 @@ const COLOR_OPTIONS = [
 export default function AvatarPicker({ userId, currentAvatar, currentEmail, onAvatarUpdate }: AvatarPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
   const [selectedPreset, setSelectedPreset] = useState(currentAvatar || PRESET_AVATARS[0]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const avatarRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isOpen && avatarRef.current) {
-      const rect = avatarRef.current.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom + 8,
-        left: rect.left - 120,
-      });
-    }
-  }, [isOpen]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -89,15 +77,17 @@ export default function AvatarPicker({ userId, currentAvatar, currentEmail, onAv
     await saveAvatar(url);
   };
 
-  const getInitials = (email: string) => email?.[0]?.toUpperCase() || '?';
+  const getInitials = (email: string) => email?.match(/[a-zA-Z]/)?.[0]?.toUpperCase() || '?';
+
+  const LETTERS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
 
   return (
     <>
-      {/* Current Avatar */}
-      <div ref={avatarRef} className="relative inline-block">
-        <button onClick={() => setIsOpen(!isOpen)} className="relative group block">
+      {/* Current Avatar - small and in header */}
+      <div className="relative">
+        <button onClick={() => setIsOpen(!isOpen)} className="block">
           <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold overflow-hidden border-2 border-white shadow-md"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-base font-bold overflow-hidden border-2 border-white/50"
             style={{ background: 'var(--color-vermilion)' }}
           >
             {currentAvatar ? (
@@ -106,75 +96,65 @@ export default function AvatarPicker({ userId, currentAvatar, currentEmail, onAv
               getInitials(currentEmail)
             )}
           </div>
-          <div className="absolute inset-0 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'rgba(0,0,0,0.5)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
-              <circle cx="12" cy="13" r="4" />
-            </svg>
-          </div>
         </button>
+
+        {/* Modal - positioned below avatar */}
+        {isOpen && (
+          <div
+            className="absolute right-0 top-full mt-2 z-[9999] washi-border rounded-2xl p-5 w-72 shadow-2xl"
+            style={{ background: 'var(--color-warm-white)' }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="header-title text-lg">更换头像</h2>
+              <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100 text-base">×</button>
+            </div>
+
+            {/* Upload */}
+            <div className="mb-4">
+              <p className="sidenote mb-2 text-xs">上传图片</p>
+              <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-primary w-full py-2 text-sm">
+                {uploading ? '上传中...' : '选择图片上传'}
+              </button>
+            </div>
+
+            {/* Presets */}
+            <div className="mb-4">
+              <p className="sidenote mb-2 text-xs">预设头像</p>
+              <div className="grid grid-cols-4 gap-2">
+                {PRESET_AVATARS.map((url, i) => (
+                  <button
+                    key={i}
+                    onClick={() => selectPreset(url)}
+                    className={`w-12 h-12 rounded-full overflow-hidden border-2 transition-all hover:scale-105 ${
+                      selectedPreset === url ? 'border-[var(--color-vermilion)]' : 'border-transparent'
+                    }`}
+                  >
+                    <img src={url} alt="" className="w-full h-full" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Color initials */}
+            <div>
+              <p className="sidenote mb-2 text-xs">字母头像</p>
+              <div className="flex flex-wrap gap-2">
+                {LETTERS.map((letter, i) => (
+                  <button
+                    key={i}
+                    onClick={() => selectPreset(`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='${encodeURIComponent(COLOR_OPTIONS[i % COLOR_OPTIONS.length])}' width='100' height='100' rx='50'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>${letter}</text></svg>`)}
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base hover:scale-105 transition-transform"
+                    style={{ background: COLOR_OPTIONS[i % COLOR_OPTIONS.length] }}
+                  >
+                    {letter}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Modal - fixed positioned at avatar's bottom-left */}
-      {isOpen && (
-        <div
-          className="fixed z-[100] paper-texture washi-border rounded-xl p-5 w-72 shadow-xl"
-          style={{
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-            background: 'var(--color-warm-white)',
-          }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="header-title text-lg">更换头像</h2>
-            <button onClick={() => setIsOpen(false)} className="p-1 rounded hover:bg-gray-100 text-lg">×</button>
-          </div>
-
-          {/* Upload */}
-          <div className="mb-4">
-            <p className="sidenote mb-2 text-xs">上传图片</p>
-            <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-secondary w-full py-2 text-sm">
-              {uploading ? '上传中...' : '选择图片'}
-            </button>
-          </div>
-
-          {/* Presets */}
-          <div className="mb-4">
-            <p className="sidenote mb-2 text-xs">预设头像</p>
-            <div className="grid grid-cols-4 gap-2">
-              {PRESET_AVATARS.map((url, i) => (
-                <button
-                  key={i}
-                  onClick={() => selectPreset(url)}
-                  className={`w-14 h-14 rounded-full overflow-hidden border-2 transition-all ${
-                    selectedPreset === url ? 'border-[var(--color-vermilion)]' : 'border-transparent'
-                  }`}
-                >
-                  <img src={url} alt="" className="w-full h-full" />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Color initials */}
-          <div>
-            <p className="sidenote mb-2 text-xs">字母头像</p>
-            <div className="flex flex-wrap gap-2">
-              {COLOR_OPTIONS.map((color, i) => (
-                <button
-                  key={i}
-                  onClick={() => selectPreset(`data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='${encodeURIComponent(color)}' width='100' height='100' rx='50'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>${getInitials(currentEmail)}</text></svg>`)}
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
-                  style={{ background: color }}
-                >
-                  {getInitials(currentEmail)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

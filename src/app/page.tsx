@@ -112,7 +112,7 @@ export default function Home() {
       `}</style>
 
       {/* Header */}
-      <header className="fade-in" style={{
+      <header className="fade-in relative z-50" style={{
         background: 'var(--color-warm-white)',
         borderBottom: '1px solid var(--color-paper)',
         padding: '20px 32px',
