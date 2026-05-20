@@ -20,6 +20,7 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [groupMembers, setGroupMembers] = useState<(GroupMember & { user: { id: string; email: string } })[]>([]);
+  const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
 
   useEffect(() => {
     if (selectedGroupId) {
@@ -77,7 +78,7 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
 
     const expenseData = {
       date: formatDate(selectedDate),
-      amount: parseFloat(amount),
+      amount: transactionType === 'income' ? Math.abs(parseFloat(amount)) : -Math.abs(parseFloat(amount)),
       note,
       user_id: user.id,
       group_id: selectedGroupId || null,
@@ -153,6 +154,34 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
         </div>
       </div>
 
+      {/* Transaction Type Toggle */}
+      <div className="flex gap-2 mb-4">
+        <button
+          type="button"
+          onClick={() => setTransactionType('expense')}
+          className={`flex-1 py-3 rounded-lg font-medium transition-all ${
+            transactionType === 'expense'
+              ? 'text-white shadow-md'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          style={transactionType === 'expense' ? { background: 'var(--color-vermilion)' } : {}}
+        >
+          支出
+        </button>
+        <button
+          type="button"
+          onClick={() => setTransactionType('income')}
+          className={`flex-1 py-3 rounded-lg font-medium transition-all ${
+            transactionType === 'income'
+              ? 'text-white shadow-md'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          style={transactionType === 'income' ? { background: 'var(--color-sage)' } : {}}
+        >
+          收入
+        </button>
+      </div>
+
       {/* Group Selector */}
       <GroupSelector
         userId={user.id}
@@ -173,8 +202,8 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
       {/* Amount Input */}
       <div>
         <label className="block sidenote mb-2">金额 (元)</label>
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl" style={{ color: 'var(--color-vermilion)' }}>¥</span>
+        <div className="flex items-center gap-3">
+          <span className="text-2xl font-semibold" style={{ color: 'var(--color-vermilion)' }}>¥</span>
           <input
             type="number"
             step="0.01"
@@ -182,7 +211,7 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
             value={amount}
             onChange={e => setAmount(e.target.value)}
             placeholder="0.00"
-            className="pl-10 pr-16 py-4 text-2xl font-semibold"
+            className="flex-1 py-4 text-2xl font-semibold pr-16"
             style={{
               border: '2px solid var(--color-paper)',
               background: 'var(--color-warm-white)'
@@ -218,7 +247,7 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
         className="btn-primary w-full py-4 text-lg"
         style={{ borderRadius: '8px' }}
       >
-        {loading ? '提交中...' : '记一笔'}
+        {loading ? '提交中...' : transactionType === 'income' ? '记收入' : '记支出'}
       </button>
     </form>
   );

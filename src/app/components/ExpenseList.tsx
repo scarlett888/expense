@@ -35,8 +35,8 @@ export default function ExpenseList({ expenses, selectedDate, onDelete }: Expens
       {/* Total */}
       <div className="flex justify-between items-center p-3 rounded-lg" style={{ background: 'var(--color-cream)' }}>
         <span className="sidenote">合计</span>
-        <span className="text-xl font-semibold" style={{ color: 'var(--color-vermilion)' }}>
-          -¥{total.toFixed(2)}
+        <span className="text-xl font-semibold" style={{ color: total >= 0 ? 'var(--color-sage)' : 'var(--color-vermilion)' }}>
+          {total >= 0 ? '+' : '-'}¥{Math.abs(total).toFixed(2)}
         </span>
       </div>
 
@@ -63,8 +63,8 @@ export default function ExpenseList({ expenses, selectedDate, onDelete }: Expens
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="font-semibold" style={{ color: 'var(--color-vermilion)' }}>
-                -¥{expense.amount.toFixed(2)}
+              <span className="font-semibold" style={{ color: expense.amount >= 0 ? 'var(--color-sage)' : 'var(--color-vermilion)' }}>
+                {expense.amount >= 0 ? '+' : '-'}¥{Math.abs(expense.amount).toFixed(2)}
               </span>
               <button
                 onClick={() => onDelete(expense.id)}
