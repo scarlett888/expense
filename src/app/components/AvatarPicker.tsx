@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { supabase } from '@/utils/supabase';
 
 interface AvatarPickerProps {
   userId: string;
@@ -48,28 +47,32 @@ export default function AvatarPicker({ userId, currentAvatar, currentEmail, onAv
 
     setUploading(true);
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}-${Date.now()}.${fileExt}`;
-    const filePath = `avatars/${fileName}`;
+    const formData = new FormData();
+    formData.append('file', file);
 
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file);
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
 
-    if (uploadError) {
-      alert('上传失败：' + uploadError.message);
-      setUploading(false);
-      return;
+    if (res.ok) {
+      const { url } = await res.json();
+      await saveAvatar(url);
+    } else {
+      alert('上传失败');
     }
-
-    const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-    await saveAvatar(data.publicUrl);
     setUploading(false);
   };
 
   const saveAvatar = async (url: string) => {
-    await supabase.from('profiles').upsert({ user_id: userId, avatar_url: url });
-    onAvatarUpdate(url);
+    const res = await fetch('/api/profiles', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ avatar_url: url }),
+    });
+    if (res.ok) {
+      onAvatarUpdate(url);
+    }
   };
 
   const selectPreset = async (url: string) => {
@@ -98,7 +101,7 @@ export default function AvatarPicker({ userId, currentAvatar, currentEmail, onAv
           </div>
         </button>
 
-        {/* Modal - positioned below avatar */}
+        {/* Modal */}
         {isOpen && (
           <div
             className="absolute right-0 top-full mt-2 z-[9999] washi-border rounded-2xl p-5 w-72 shadow-2xl"

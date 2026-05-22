@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabase';
+import { useSession, signOut } from 'next-auth/react';
 import Calendar from './components/Calendar';
 import ExpenseForm from './components/ExpenseForm';
 import ExpenseList from './components/ExpenseList';
@@ -11,79 +11,58 @@ import { Expense, Profile, Group } from '@/types/expense';
 import AuthForm from './components/AuthForm';
 
 export default function Home() {
-  const [user, setUser] = useState<any>(null);
+  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
   const [userGroups, setUserGroups] = useState<Group[]>([]);
   const [groupExpenses, setGroupExpenses] = useState<Expense[]>([]);
   const router = useRouter();
 
   useEffect(() => {
-    checkUser();
+    if (status === 'unauthenticated') {
+      setExpenses([]);
+      setProfile(null);
+      setUserGroups([]);
+    }
+  }, [status]);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
-        fetchExpenses();
-      } else {
-        setExpenses([]);
-      }
-    });
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchProfile();
+      fetchGroups();
+      fetchExpenses();
+    }
+  }, [session?.user?.id]);
 
-    return () => subscription.unsubscribe();
-  }, []);
+  const fetchProfile = async () => {
+    const res = await fetch('/api/profiles');
+    if (res.ok) {
+      const data = await res.json();
+      setProfile(data);
+    }
+  };
 
-  const checkUser = async () => {
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-    setUser(user);
+  const fetchGroups = async () => {
+    const res = await fetch('/api/groups');
+    if (!res.ok) return;
+    const groups: Group[] = await res.json();
+    setUserGroups(groups);
 
-    if (user) {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-      setProfile(profileData);
-
-      // Fetch user's groups
-      const { data: memberGroups } = await supabase
-        .from('group_members')
-        .select('group_id, group:groups!group_id(id, name)')
-        .eq('user_id', user.id);
-
-      if (memberGroups) {
-        const groups = memberGroups.map((mg: any) => mg.group).filter(Boolean);
-        setUserGroups(groups);
-
-        // Fetch expenses from all user's groups
-        const groupIds = groups.map((g: Group) => g.id);
-        if (groupIds.length > 0) {
-          const { data: groupExpData } = await supabase
-            .from('expenses')
-            .select('*')
-            .in('group_id', groupIds)
-            .order('created_at', { ascending: false });
-          if (groupExpData) {
-            setGroupExpenses(groupExpData);
-          }
-        }
+    if (groups.length > 0) {
+      const groupIds = groups.map(g => g.id);
+      const res2 = await fetch(`/api/expenses?groupIds=${groupIds.join(',')}`);
+      if (res2.ok) {
+        const data: Expense[] = await res2.json();
+        setGroupExpenses(data);
       }
     }
-
-    setLoading(false);
   };
 
   const fetchExpenses = async () => {
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
+    const res = await fetch('/api/expenses');
+    if (res.ok) {
+      const data: Expense[] = await res.json();
       setExpenses(data);
     }
   };
@@ -93,23 +72,21 @@ export default function Home() {
   };
 
   const handleDeleteExpense = async (id: string) => {
-    const { error } = await supabase.from('expenses').delete().eq('id', id);
-    if (!error) {
+    const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+    if (res.ok) {
       setExpenses(prev => prev.filter(e => e.id !== id));
     }
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setExpenses([]);
+  const handleSignOut = () => {
+    signOut({ callbackUrl: '/' });
   };
 
   const handleAvatarUpdate = (url: string) => {
     setProfile(prev => prev ? { ...prev, avatar_url: url } : null);
   };
 
-  if (loading) {
+  if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-cream)' }}>
         <div className="text-center">
@@ -124,9 +101,11 @@ export default function Home() {
     );
   }
 
-  if (!user) {
+  if (!session) {
     return <AuthForm />;
   }
+
+  const user = session.user;
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-cream)' }}>
@@ -156,7 +135,7 @@ export default function Home() {
             <AvatarPicker
               userId={user.id}
               currentAvatar={profile?.avatar_url}
-              currentEmail={user.email}
+              currentEmail={user.email || ''}
               onAvatarUpdate={handleAvatarUpdate}
             />
             <span className="sidenote hidden md:inline">{user.email}</span>
@@ -222,7 +201,7 @@ export default function Home() {
                 <h2 className="header-title text-xl" style={{ color: 'var(--color-ink)' }}>记一笔</h2>
               </div>
 
-              <ExpenseForm selectedDate={selectedDate} onAddExpense={handleAddExpense} user={user} />
+              <ExpenseForm selectedDate={selectedDate} onAddExpense={handleAddExpense} />
 
               <div className="mt-8 pt-6" style={{ borderTop: '1px dashed var(--color-paper)' }}>
                 <div className="flex items-center gap-3 mb-4">

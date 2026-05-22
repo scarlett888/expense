@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/utils/supabase';
-import { Group, GroupMember } from '@/types/expense';
+import { Group } from '@/types/expense';
 
 interface GroupSelectorProps {
   userId: string;
@@ -15,16 +14,15 @@ export default function GroupSelector({ userId, selectedGroupId, onSelectGroup }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchGroups();
+    if (userId) {
+      fetchGroups();
+    }
   }, [userId]);
 
   const fetchGroups = async () => {
-    const { data, error } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('created_by', userId);
-
-    if (!error && data) {
+    const res = await fetch('/api/groups');
+    if (res.ok) {
+      const data: Group[] = await res.json();
       setGroups(data);
     }
     setLoading(false);

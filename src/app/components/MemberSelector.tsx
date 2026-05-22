@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/utils/supabase';
-import { GroupMember as GroupMemberType } from '@/types/expense';
+import { GroupMember } from '@/types/expense';
 
 interface MemberSelectorProps {
   groupId: string;
@@ -12,7 +11,7 @@ interface MemberSelectorProps {
 }
 
 export default function MemberSelector({ groupId, selectedMemberIds, onMemberToggle, onSelectAll }: MemberSelectorProps) {
-  const [members, setMembers] = useState<(GroupMemberType & { user: { id: string; email: string } })[]>([]);
+  const [members, setMembers] = useState<(GroupMember & { user_email?: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,15 +21,9 @@ export default function MemberSelector({ groupId, selectedMemberIds, onMemberTog
   }, [groupId]);
 
   const fetchMembers = async () => {
-    const { data, error } = await supabase
-      .from('group_members')
-      .select(`
-        *,
-        user:users!user_id (id, email)
-      `)
-      .eq('group_id', groupId);
-
-    if (!error && data) {
+    const res = await fetch(`/api/groups/${groupId}/members`);
+    if (res.ok) {
+      const data = await res.json();
       setMembers(data);
     }
     setLoading(false);
@@ -58,6 +51,7 @@ export default function MemberSelector({ groupId, selectedMemberIds, onMemberTog
       <div className="flex flex-wrap gap-2">
         {members.map(member => {
           const isSelected = selectedMemberIds.includes(member.user_id);
+          const displayEmail = (member as any).user_email || '';
           return (
             <button
               key={member.id}
@@ -75,9 +69,9 @@ export default function MemberSelector({ groupId, selectedMemberIds, onMemberTog
                 className="w-6 h-6 rounded-full flex items-center justify-center text-xs"
                 style={{ background: isSelected ? 'rgba(255,255,255,0.2)' : 'var(--color-paper)' }}
               >
-                {member.user?.email?.[0]?.toUpperCase() || '?'}
+                {displayEmail?.[0]?.toUpperCase() || '?'}
               </div>
-              <span className="text-sm">{member.nickname || member.user?.email?.split('@')[0] || '成员'}</span>
+              <span className="text-sm">{member.nickname || displayEmail.split('@')[0] || '成员'}</span>
             </button>
           );
         })}

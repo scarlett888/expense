@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/utils/supabase';
+import { signIn } from 'next-auth/react';
 
 export default function AuthForm() {
   const [isLogin, setIsLogin] = useState(true);
@@ -17,19 +17,29 @@ export default function AuthForm() {
     setMessage('');
 
     if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setMessage(error.message);
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
+      if (result?.error) {
+        setMessage('邮箱或密码错误');
         setMessageType('error');
       }
     } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        setMessage(error.message);
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error || '注册失败');
         setMessageType('error');
       } else {
-        setMessage('注册成功！请查收验证邮件后登录。');
+        setMessage('注册成功，请登录');
         setMessageType('success');
+        setIsLogin(true);
       }
     }
     setLoading(false);

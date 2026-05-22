@@ -2,68 +2,60 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabase';
+import { useSession } from 'next-auth/react';
 import { Group, GroupMember } from '@/types/expense';
 
+interface MemberWithEmail extends GroupMember {
+  user_email?: string;
+}
+
 export default function GroupsPage() {
-  const [user, setUser] = useState<any>(null);
+  const { data: session, status } = useSession();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [groupMembers, setGroupMembers] = useState<(GroupMember & { user: { id: string; email: string } })[]>([]);
+  const [groupMembers, setGroupMembers] = useState<MemberWithEmail[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [creating, setCreating] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    checkUser();
-  }, []);
+  const userId = session?.user?.id;
 
   useEffect(() => {
-    if (user) {
+    if (status === 'unauthenticated') {
+      router.push('/');
+    }
+  }, [status, router]);
+
+  useEffect(() => {
+    if (userId) {
       fetchGroups();
     }
-  }, [user]);
-
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/');
-      return;
-    }
-    setUser(user);
-    setLoading(false);
-  };
+  }, [userId]);
 
   const fetchGroups = async () => {
-    const { data, error } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('created_by', user.id);
-
-    if (!error && data) {
+    const res = await fetch('/api/groups');
+    if (res.ok) {
+      const data: Group[] = await res.json();
       setGroups(data);
     }
+    setLoading(false);
   };
 
   const createGroup = async () => {
     if (!newGroupName.trim()) return;
 
     setCreating(true);
-    const { data, error } = await supabase
-      .from('groups')
-      .insert({ name: newGroupName, created_by: user.id })
-      .select()
-      .single();
+    const res = await fetch('/api/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newGroupName }),
+    });
 
-    if (!error && data) {
-      // Add creator as first member
-      await supabase
-        .from('group_members')
-        .insert({ group_id: data.id, user_id: user.id, nickname: '我' });
-
+    if (res.ok) {
+      const data: Group = await res.json();
       setGroups([data, ...groups]);
       setNewGroupName('');
       setShowCreateModal(false);
@@ -73,66 +65,68 @@ export default function GroupsPage() {
 
   const openGroupDetail = async (group: Group) => {
     setSelectedGroup(group);
-    const { data } = await supabase
-      .from('group_members')
-      .select('*, user:users!user_id (id, email)')
-      .eq('group_id', group.id);
-    setGroupMembers(data || []);
+    const res = await fetch(`/api/groups/${group.id}/members`);
+    if (res.ok) {
+      const data: MemberWithEmail[] = await res.json();
+      setGroupMembers(data);
+    }
   };
 
   const inviteMember = async () => {
     if (!inviteEmail.trim() || !selectedGroup) return;
 
     // Find user by email
-    const { data: foundUser } = await supabase
-      .from('users')
-      .select('id, email')
-      .eq('email', inviteEmail)
-      .single();
+    const res = await fetch(`/api/users/find?email=${encodeURIComponent(inviteEmail)}`);
+    const foundUser = await res.json();
 
-    if (!foundUser) {
+    if (!foundUser || !foundUser.id) {
       alert('未找到该用户，请确认邮箱正确');
       return;
     }
 
     // Add to group
-    const { error } = await supabase
-      .from('group_members')
-      .insert({
-        group_id: selectedGroup.id,
-        user_id: foundUser.id,
-        nickname: inviteEmail.split('@')[0]
-      });
+    const addRes = await fetch(`/api/groups/${selectedGroup.id}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: foundUser.id, nickname: inviteEmail.split('@')[0] }),
+    });
 
-    if (!error) {
-      // Refresh members
-      const { data } = await supabase
-        .from('group_members')
-        .select('*, user:users!user_id (id, email)')
-        .eq('group_id', selectedGroup.id);
-      setGroupMembers(data || []);
+    if (addRes.ok) {
+      const membersRes = await fetch(`/api/groups/${selectedGroup.id}/members`);
+      if (membersRes.ok) {
+        const data: MemberWithEmail[] = await membersRes.json();
+        setGroupMembers(data);
+      }
       setInviteEmail('');
     } else {
-      alert('添加失败：' + error.message);
+      const data = await addRes.json();
+      alert('添加失败：' + (data.error || '未知错误'));
     }
   };
 
   const removeMember = async (memberId: string) => {
     if (!confirm('确定要移除该成员吗？')) return;
+    if (!selectedGroup) return;
 
-    await supabase.from('group_members').delete().eq('id', memberId);
-    setGroupMembers(groupMembers.filter(m => m.id !== memberId));
+    const res = await fetch(`/api/groups/${selectedGroup.id}/members?memberId=${memberId}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      setGroupMembers(groupMembers.filter(m => m.id !== memberId));
+    }
   };
 
   const deleteGroup = async () => {
     if (!selectedGroup || !confirm('确定要删除该小组吗？')) return;
 
-    await supabase.from('groups').delete().eq('id', selectedGroup.id);
-    setGroups(groups.filter(g => g.id !== selectedGroup.id));
-    setSelectedGroup(null);
+    const res = await fetch(`/api/groups/${selectedGroup.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setGroups(groups.filter(g => g.id !== selectedGroup.id));
+      setSelectedGroup(null);
+    }
   };
 
-  if (loading) {
+  if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-cream)' }}>
         <p className="sidenote">加载中...</p>
@@ -259,14 +253,14 @@ export default function GroupsPage() {
                   <div key={member.id} className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--color-cream)' }}>
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-white" style={{ background: 'var(--color-sage)' }}>
-                        {member.user?.email?.[0]?.toUpperCase() || '?'}
+                        {member.user_email?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div>
-                        <p className="font-medium text-sm">{member.nickname || member.user?.email?.split('@')[0]}</p>
-                        <p className="sidenote text-xs">{member.user?.email}</p>
+                        <p className="font-medium text-sm">{member.nickname || member.user_email?.split('@')[0]}</p>
+                        <p className="sidenote text-xs">{member.user_email}</p>
                       </div>
                     </div>
-                    {member.user_id !== user.id && (
+                    {member.user_id !== userId && (
                       <button
                         onClick={() => removeMember(member.id)}
                         className="text-xs px-2 py-1 rounded hover:bg-red-50"

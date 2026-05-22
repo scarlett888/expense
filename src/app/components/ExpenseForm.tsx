@@ -1,19 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/utils/supabase';
-import { Expense, GroupMember } from '@/types/expense';
+import { useSession } from 'next-auth/react';
 import { formatDate } from '@/utils/date';
 import GroupSelector from './GroupSelector';
 import MemberSelector from './MemberSelector';
+import { Expense, GroupMember } from '@/types/expense';
 
 interface ExpenseFormProps {
   selectedDate: Date;
   onAddExpense: (expense: Expense) => void;
-  user: any;
 }
 
-export default function ExpenseForm({ selectedDate, onAddExpense, user }: ExpenseFormProps) {
+export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormProps) {
+  const { data: session } = useSession();
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,25 +22,23 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
   const [groupMembers, setGroupMembers] = useState<(GroupMember & { user: { id: string; email: string } })[]>([]);
   const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
 
+  const userId = session?.user?.id;
+
   useEffect(() => {
     if (selectedGroupId) {
-      fetchGroupMembers();
+      fetchGroupMembers(selectedGroupId);
     } else {
       setGroupMembers([]);
       setSelectedMemberIds([]);
     }
   }, [selectedGroupId]);
 
-  const fetchGroupMembers = async () => {
-    const { data, error } = await supabase
-      .from('group_members')
-      .select('*, user:users!user_id (id, email)')
-      .eq('group_id', selectedGroupId);
-
-    if (!error && data) {
+  const fetchGroupMembers = async (groupId: string) => {
+    const res = await fetch(`/api/groups/${groupId}/members`);
+    if (res.ok) {
+      const data = await res.json();
       setGroupMembers(data);
-      // Default: all members selected
-      setSelectedMemberIds(data.map(m => m.user_id));
+      setSelectedMemberIds(data.map((m: { user_id: string }) => m.user_id));
     }
   };
 
@@ -64,7 +62,7 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
     e.preventDefault();
     if (!amount || parseFloat(amount) <= 0) return;
 
-    if (!user) {
+    if (!userId) {
       alert('请先登录');
       return;
     }
@@ -80,55 +78,26 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
       date: formatDate(selectedDate),
       amount: transactionType === 'income' ? Math.abs(parseFloat(amount)) : -Math.abs(parseFloat(amount)),
       note,
-      user_id: user.id,
       group_id: selectedGroupId || null,
-      payer_id: user.id,
+      memberIds: selectedGroupId ? selectedMemberIds : undefined,
     };
 
-    // If group expense, create with splits
-    if (selectedGroupId && selectedMemberIds.length > 0) {
-      const splitAmount = Number((parseFloat(amount) / selectedMemberIds.length).toFixed(2));
+    const res = await fetch('/api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(expenseData),
+    });
 
-      // Insert expense
-      const { data: expenseResult, error: expenseError } = await supabase
-        .from('expenses')
-        .insert(expenseData)
-        .select()
-        .single();
-
-      if (expenseError) {
-        alert('添加失败：' + expenseError.message);
-        setLoading(false);
-        return;
-      }
-
-      // Create splits for each member
-      const splits = selectedMemberIds.map(memberId => ({
-        expense_id: expenseResult.id,
-        user_id: memberId,
-        amount: splitAmount,
-      }));
-
-      await supabase.from('expense_splits').insert(splits);
-
-      onAddExpense(expenseResult);
+    if (res.ok) {
+      const expense: Expense = await res.json();
+      onAddExpense(expense);
+      setAmount('');
+      setNote('');
     } else {
-      // Personal expense
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert(expenseData)
-        .select()
-        .single();
-
-      if (error) {
-        alert('添加失败：' + error.message);
-      } else {
-        onAddExpense(data);
-      }
+      const data = await res.json();
+      alert('添加失败：' + (data.error || '未知错误'));
     }
 
-    setAmount('');
-    setNote('');
     setLoading(false);
   };
 
@@ -184,7 +153,7 @@ export default function ExpenseForm({ selectedDate, onAddExpense, user }: Expens
 
       {/* Group Selector */}
       <GroupSelector
-        userId={user.id}
+        userId={userId || ''}
         selectedGroupId={selectedGroupId}
         onSelectGroup={setSelectedGroupId}
       />
