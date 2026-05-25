@@ -21,7 +21,11 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const ext = file.name.split('.').pop() || 'jpg'
+    const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp']
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+    if (!allowedExts.includes(ext)) {
+      return NextResponse.json({ error: '不支持的文件类型' }, { status: 400 })
+    }
     const filename = `${session.user.id}-${Date.now()}.${ext}`
     const uploadDir = join(process.cwd(), 'public', 'avatars')
 

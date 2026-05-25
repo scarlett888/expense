@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { db, schema } from '@/utils/db'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, inArray } from 'drizzle-orm'
 import { randomUUID } from 'crypto'
 
 // GET /api/groups
@@ -22,7 +22,6 @@ export async function GET() {
     if (memberships.length === 0) return NextResponse.json([])
 
     const groupIds = memberships.map(m => m.group_id)
-    const { inArray } = await import('drizzle-orm')
     const data = await db.select().from(schema.groups)
       .where(inArray(schema.groups.id, groupIds))
       .orderBy(desc(schema.groups.created_at))

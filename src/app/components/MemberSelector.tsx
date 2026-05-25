@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { GroupMember } from '@/types/expense';
 
 interface MemberSelectorProps {
@@ -14,20 +14,21 @@ export default function MemberSelector({ groupId, selectedMemberIds, onMemberTog
   const [members, setMembers] = useState<(GroupMember & { user_email?: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (groupId) {
-      fetchMembers();
-    }
-  }, [groupId]);
-
-  const fetchMembers = async () => {
-    const res = await fetch(`/api/groups/${groupId}/members`);
+  const fetchMembers = useCallback(async (gid: string) => {
+    setLoading(true);
+    const res = await fetch(`/api/groups/${gid}/members`);
     if (res.ok) {
       const data = await res.json();
       setMembers(data);
     }
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (groupId) {
+      fetchMembers(groupId);
+    }
+  }, [groupId, fetchMembers]);
 
   if (loading || members.length === 0) {
     return null;
@@ -51,7 +52,7 @@ export default function MemberSelector({ groupId, selectedMemberIds, onMemberTog
       <div className="flex flex-wrap gap-2">
         {members.map(member => {
           const isSelected = selectedMemberIds.includes(member.user_id);
-          const displayEmail = (member as any).user_email || '';
+          const displayEmail = member.user_email || '';
           return (
             <button
               key={member.id}

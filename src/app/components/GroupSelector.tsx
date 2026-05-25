@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Group } from '@/types/expense';
 
 interface GroupSelectorProps {
@@ -13,20 +13,21 @@ export default function GroupSelector({ userId, selectedGroupId, onSelectGroup }
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (userId) {
-      fetchGroups();
-    }
-  }, [userId]);
-
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
+    setLoading(true);
     const res = await fetch('/api/groups');
     if (res.ok) {
       const data: Group[] = await res.json();
       setGroups(data);
     }
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (userId) {
+      fetchGroups();
+    }
+  }, [userId, fetchGroups]);
 
   if (loading) {
     return <div className="text-sm sidenote">加载小组...</div>;

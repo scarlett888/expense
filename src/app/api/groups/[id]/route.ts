@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { db, schema } from '@/utils/db'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 
 // DELETE /api/groups/[id]
 export async function DELETE(
@@ -22,7 +22,6 @@ export async function DELETE(
     const expenseIds = relatedExpenses.map(e => e.id)
 
     if (expenseIds.length > 0) {
-      const { inArray } = await import('drizzle-orm')
       await db.delete(schema.expense_splits)
         .where(inArray(schema.expense_splits.expense_id, expenseIds))
     }

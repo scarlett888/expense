@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { formatDate } from '@/utils/date';
 import GroupSelector from './GroupSelector';
@@ -24,6 +24,15 @@ export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormP
 
   const userId = session?.user?.id;
 
+  const fetchGroupMembers = useCallback(async (groupId: string) => {
+    const res = await fetch(`/api/groups/${groupId}/members`);
+    if (res.ok) {
+      const data = await res.json();
+      setGroupMembers(data);
+      setSelectedMemberIds(data.map((m: { user_id: string }) => m.user_id));
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedGroupId) {
       fetchGroupMembers(selectedGroupId);
@@ -31,16 +40,7 @@ export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormP
       setGroupMembers([]);
       setSelectedMemberIds([]);
     }
-  }, [selectedGroupId]);
-
-  const fetchGroupMembers = async (groupId: string) => {
-    const res = await fetch(`/api/groups/${groupId}/members`);
-    if (res.ok) {
-      const data = await res.json();
-      setGroupMembers(data);
-      setSelectedMemberIds(data.map((m: { user_id: string }) => m.user_id));
-    }
-  };
+  }, [selectedGroupId, fetchGroupMembers]);
 
   const handleMemberToggle = (memberId: string) => {
     setSelectedMemberIds(prev =>

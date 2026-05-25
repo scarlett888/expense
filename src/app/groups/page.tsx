@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Group, GroupMember } from '@/types/expense';
@@ -23,6 +23,24 @@ export default function GroupsPage() {
 
   const userId = session?.user?.id;
 
+  const fetchGroups = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch('/api/groups');
+    if (res.ok) {
+      const data: Group[] = await res.json();
+      setGroups(data);
+    }
+    setLoading(false);
+  }, []);
+
+  const fetchGroupMembers = useCallback(async (groupId: string) => {
+    const res = await fetch(`/api/groups/${groupId}/members`);
+    if (res.ok) {
+      const data: MemberWithEmail[] = await res.json();
+      setGroupMembers(data);
+    }
+  }, []);
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/');
@@ -33,16 +51,13 @@ export default function GroupsPage() {
     if (userId) {
       fetchGroups();
     }
-  }, [userId]);
+  }, [userId, fetchGroups]);
 
-  const fetchGroups = async () => {
-    const res = await fetch('/api/groups');
-    if (res.ok) {
-      const data: Group[] = await res.json();
-      setGroups(data);
+  useEffect(() => {
+    if (selectedGroup) {
+      fetchGroupMembers(selectedGroup.id);
     }
-    setLoading(false);
-  };
+  }, [selectedGroup, fetchGroupMembers]);
 
   const createGroup = async () => {
     if (!newGroupName.trim()) return;
@@ -63,13 +78,9 @@ export default function GroupsPage() {
     setCreating(false);
   };
 
-  const openGroupDetail = async (group: Group) => {
+  const openGroupDetail = (group: Group) => {
     setSelectedGroup(group);
-    const res = await fetch(`/api/groups/${group.id}/members`);
-    if (res.ok) {
-      const data: MemberWithEmail[] = await res.json();
-      setGroupMembers(data);
-    }
+    setGroupMembers([]);
   };
 
   const inviteMember = async () => {
@@ -100,7 +111,8 @@ export default function GroupsPage() {
       setInviteEmail('');
     } else {
       const data = await addRes.json();
-      alert('添加失败：' + (data.error || '未知错误'));
+      const msg = data.error || data.message || '未知错误';
+      alert('添加失败：' + msg);
     }
   };
 
