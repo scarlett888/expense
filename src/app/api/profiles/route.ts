@@ -11,9 +11,7 @@ export async function GET() {
   }
 
   try {
-    const profile = await db.query.profiles.findFirst({
-      where: eq(schema.profiles.user_id, session.user.id),
-    })
+    const [profile] = await db.select().from(schema.profiles).where(eq(schema.profiles.user_id, session.user.id)).limit(1)
     return NextResponse.json(profile || null)
   } catch (err) {
     console.error('[profiles GET]', err)
@@ -32,9 +30,7 @@ export async function PUT(req: NextRequest) {
     const { avatar_url, nickname } = await req.json()
     const userId = session.user.id
 
-    const existing = await db.query.profiles.findFirst({
-      where: eq(schema.profiles.user_id, userId),
-    })
+    const [existing] = await db.select().from(schema.profiles).where(eq(schema.profiles.user_id, userId)).limit(1)
 
     if (existing) {
       await db.update(schema.profiles)
@@ -51,9 +47,7 @@ export async function PUT(req: NextRequest) {
       })
     }
 
-    const updated = await db.query.profiles.findFirst({
-      where: eq(schema.profiles.user_id, userId),
-    })
+    const [updated] = await db.select().from(schema.profiles).where(eq(schema.profiles.user_id, userId)).limit(1)
     return NextResponse.json(updated)
   } catch (err) {
     console.error('[profiles PUT]', err)

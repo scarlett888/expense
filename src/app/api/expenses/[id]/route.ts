@@ -55,7 +55,7 @@ export async function DELETE(
     if (expense?.source_type === 'group') {
       const relatedOwes = await db.select({ id: schema.expenses.id }).from(schema.expenses)
         .where(eq(schema.expenses.source_expense_id, params.id))
-      deletedOweIds = relatedOwes.map(o => o.id)
+      deletedOweIds = relatedOwes.map((o: { id: string }) => o.id)
       if (deletedOweIds.length > 0) {
         await db.delete(schema.expenses).where(
           and(inArray(schema.expenses.id, deletedOweIds), eq(schema.expenses.source_expense_id, params.id))

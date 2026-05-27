@@ -19,7 +19,7 @@ export async function DELETE(
     // Delete all related records
     const relatedExpenses = await db.select({ id: schema.expenses.id })
       .from(schema.expenses).where(eq(schema.expenses.group_id, groupId))
-    const expenseIds = relatedExpenses.map(e => e.id)
+    const expenseIds = relatedExpenses.map((e: { id: string }) => e.id)
 
     if (expenseIds.length > 0) {
       await db.delete(schema.expense_splits)

@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  app:
+    image: expense-book:latest
+    container_name: expense-book
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

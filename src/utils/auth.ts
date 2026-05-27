@@ -15,9 +15,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
-        const user = await db.query.users.findFirst({
-          where: eq(users.email, credentials.email as string),
-        })
+        const [user] = await db.select().from(users).where(eq(users.email, credentials.email as string)).limit(1)
         if (!user) return null
         const valid = await compare(credentials.password as string, user.password_hash)
         if (!valid) return null

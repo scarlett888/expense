@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/utils/auth'
 import { db, schema } from '@/utils/db'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { randomUUID } from 'crypto'
 
 // GET /api/groups/[id]/members
@@ -53,12 +53,9 @@ export async function POST(
       return NextResponse.json({ error: 'user_id 不能为空' }, { status: 400 })
     }
 
-    const existing = await db.query.group_members.findFirst({
-      where: (gm, { and, eq: deq }) => and(
-        deq(gm.group_id, params.id),
-        deq(gm.user_id, user_id)
-      ),
-    })
+    const [existing] = await db.select().from(schema.group_members)
+      .where(and(eq(schema.group_members.group_id, params.id), eq(schema.group_members.user_id, user_id)))
+      .limit(1)
     if (existing) {
       return NextResponse.json({ error: '该成员已在小组中' }, { status: 409 })
     }

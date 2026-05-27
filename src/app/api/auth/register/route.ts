@@ -17,9 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '密码至少6位' }, { status: 400 })
     }
 
-    const existing = await db.query.users.findFirst({
-      where: eq(users.email, email),
-    })
+    const [existing] = await db.select().from(users).where(eq(users.email, email)).limit(1)
     if (existing) {
       return NextResponse.json({ error: '该邮箱已注册' }, { status: 409 })
     }

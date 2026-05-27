@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
         const [r] = await db.select().from(schema.expenses).where(eq(schema.expenses.id, newId))
         archived.push(r)
       }
-      const oweIds = owes.map(o => o.id)
+      const oweIds = owes.map((o: { id: string }) => o.id)
       return NextResponse.json({ archived, deletedOweIds: oweIds })
     } catch (err) {
       console.error('[expenses POST archive]', err)

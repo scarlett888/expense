@@ -21,7 +21,7 @@ export async function GET() {
 
     if (memberships.length === 0) return NextResponse.json([])
 
-    const groupIds = memberships.map(m => m.group_id)
+    const groupIds = memberships.map((m: { group_id: string }) => m.group_id)
     const data = await db.select().from(schema.groups)
       .where(inArray(schema.groups.id, groupIds))
       .orderBy(desc(schema.groups.created_at))
