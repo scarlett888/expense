@@ -23,9 +23,11 @@ export async function GET(
         nickname: schema.group_members.nickname,
         created_at: schema.group_members.created_at,
         user_email: schema.users.email,
+        profile_nickname: schema.profiles.nickname,
       })
       .from(schema.group_members)
       .leftJoin(schema.users, eq(schema.group_members.user_id, schema.users.id))
+      .leftJoin(schema.profiles, eq(schema.group_members.user_id, schema.profiles.user_id))
       .where(eq(schema.group_members.group_id, params.id))
 
     return NextResponse.json(members)
@@ -62,11 +64,14 @@ export async function POST(
     }
 
     const now = new Date().toISOString()
+    // Prefer profile nickname, then passed nickname (email prefix), then null
+    const [profile] = await db.select().from(schema.profiles).where(eq(schema.profiles.user_id, user_id));
+    const resolvedNickname = profile?.nickname || nickname || null;
     await db.insert(schema.group_members).values({
       id: randomUUID(),
       group_id: params.id,
       user_id,
-      nickname: nickname || null,
+      nickname: resolvedNickname,
       created_at: now,
     })
 

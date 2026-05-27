@@ -2,11 +2,13 @@ export interface Expense {
   id: string;
   date: string;
   amount: number;
-  note: string;
+  note: string | null;
   user_id: string | null;
   created_at: string;
   group_id?: string | null;
   payer_id?: string | null;
+  source_type?: 'personal' | 'group' | 'owe';
+  source_expense_id?: string | null;
 }
 
 export interface Group {
@@ -24,6 +26,7 @@ export interface GroupMember {
   created_at: string;
   // Joined fields
   user_email?: string;
+  profile_nickname?: string | null;
 }
 
 export interface ExpenseSplit {

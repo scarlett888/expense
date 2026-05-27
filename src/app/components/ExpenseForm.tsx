@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { formatDate } from '@/utils/date';
-import GroupSelector from './GroupSelector';
-import MemberSelector from './MemberSelector';
-import { Expense, GroupMember } from '@/types/expense';
+import { Expense } from '@/types/expense';
 
 interface ExpenseFormProps {
   selectedDate: Date;
@@ -17,80 +15,32 @@ export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormP
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
-  const [groupMembers, setGroupMembers] = useState<(GroupMember & { user: { id: string; email: string } })[]>([]);
   const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
-
   const userId = session?.user?.id;
-
-  const fetchGroupMembers = useCallback(async (groupId: string) => {
-    const res = await fetch(`/api/groups/${groupId}/members`);
-    if (res.ok) {
-      const data = await res.json();
-      setGroupMembers(data);
-      setSelectedMemberIds(data.map((m: { user_id: string }) => m.user_id));
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedGroupId) {
-      fetchGroupMembers(selectedGroupId);
-    } else {
-      setGroupMembers([]);
-      setSelectedMemberIds([]);
-    }
-  }, [selectedGroupId, fetchGroupMembers]);
-
-  const handleMemberToggle = (memberId: string) => {
-    setSelectedMemberIds(prev =>
-      prev.includes(memberId)
-        ? prev.filter(id => id !== memberId)
-        : [...prev, memberId]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedMemberIds.length === groupMembers.length) {
-      setSelectedMemberIds([]);
-    } else {
-      setSelectedMemberIds(groupMembers.map(m => m.user_id));
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || parseFloat(amount) <= 0) return;
-
     if (!userId) {
       alert('请先登录');
       return;
     }
 
-    if (selectedGroupId && selectedMemberIds.length === 0) {
-      alert('请至少选择一位分摊成员');
-      return;
-    }
-
     setLoading(true);
-
-    const expenseData = {
-      date: formatDate(selectedDate),
-      amount: transactionType === 'income' ? Math.abs(parseFloat(amount)) : -Math.abs(parseFloat(amount)),
-      note,
-      group_id: selectedGroupId || null,
-      memberIds: selectedGroupId ? selectedMemberIds : undefined,
-    };
 
     const res = await fetch('/api/expenses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(expenseData),
+      body: JSON.stringify({
+        date: formatDate(selectedDate),
+        amount: transactionType === 'income' ? Math.abs(parseFloat(amount)) : -Math.abs(parseFloat(amount)),
+        note,
+      }),
     });
 
     if (res.ok) {
-      const expense: Expense = await res.json();
-      onAddExpense(expense);
+      const { main } = await res.json();
+      onAddExpense(main);
       setAmount('');
       setNote('');
     } else {
@@ -100,10 +50,6 @@ export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormP
 
     setLoading(false);
   };
-
-  const splitAmount = selectedGroupId && selectedMemberIds.length > 0 && amount
-    ? (parseFloat(amount) / selectedMemberIds.length).toFixed(2)
-    : null;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -151,23 +97,6 @@ export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormP
         </button>
       </div>
 
-      {/* Group Selector */}
-      <GroupSelector
-        userId={userId || ''}
-        selectedGroupId={selectedGroupId}
-        onSelectGroup={setSelectedGroupId}
-      />
-
-      {/* Member Selector - only show when group selected */}
-      {selectedGroupId && (
-        <MemberSelector
-          groupId={selectedGroupId}
-          selectedMemberIds={selectedMemberIds}
-          onMemberToggle={handleMemberToggle}
-          onSelectAll={handleSelectAll}
-        />
-      )}
-
       {/* Amount Input */}
       <div>
         <label className="block sidenote mb-2">金额 (元)</label>
@@ -187,11 +116,6 @@ export default function ExpenseForm({ selectedDate, onAddExpense }: ExpenseFormP
             }}
           />
         </div>
-        {splitAmount && (
-          <p className="sidenote mt-2">
-            每人应付 <span style={{ color: 'var(--color-vermilion)' }}>¥{splitAmount}</span>
-          </p>
-        )}
       </div>
 
       {/* Note Input */}

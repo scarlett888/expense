@@ -5,8 +5,10 @@ import { useState, useRef } from 'react';
 interface AvatarPickerProps {
   userId: string;
   currentAvatar?: string | null;
+  currentNickname?: string | null;
   currentEmail: string;
   onAvatarUpdate: (url: string) => void;
+  onNicknameUpdate: (nickname: string) => void;
 }
 
 const PRESET_AVATARS = [
@@ -35,10 +37,12 @@ const COLOR_OPTIONS = [
   '#9B8FA0',
 ];
 
-export default function AvatarPicker({ userId, currentAvatar, currentEmail, onAvatarUpdate }: AvatarPickerProps) {
+export default function AvatarPicker({ userId, currentAvatar, currentNickname, currentEmail, onAvatarUpdate, onNicknameUpdate }: AvatarPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState(currentAvatar || PRESET_AVATARS[0]);
+  const [nickname, setNickname] = useState(currentNickname || '');
+  const [savingNickname, setSavingNickname] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,6 +79,22 @@ export default function AvatarPicker({ userId, currentAvatar, currentEmail, onAv
     }
   };
 
+  const saveNickname = async () => {
+    const trimmed = nickname.trim();
+    if (!trimmed) return;
+    setSavingNickname(true);
+    const res = await fetch('/api/profiles', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: trimmed }),
+    });
+    if (res.ok) {
+      onNicknameUpdate(trimmed);
+      setIsOpen(false);
+    }
+    setSavingNickname(false);
+  };
+
   const selectPreset = async (url: string) => {
     setSelectedPreset(url);
     await saveAvatar(url);
@@ -108,8 +128,32 @@ export default function AvatarPicker({ userId, currentAvatar, currentEmail, onAv
             style={{ background: 'var(--color-warm-white)' }}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="header-title text-lg">更换头像</h2>
+              <h2 className="header-title text-lg">个人设置</h2>
               <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100 text-base">×</button>
+            </div>
+
+            {/* Nickname */}
+            <div className="mb-4">
+              <p className="sidenote mb-2 text-xs">显示名称</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={e => setNickname(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveNickname()}
+                  placeholder="给自己取个名字..."
+                  maxLength={20}
+                  className="flex-1 py-2 px-3 text-sm rounded-lg"
+                  style={{ border: '2px solid var(--color-paper)', background: 'var(--color-warm-white)' }}
+                />
+                <button
+                  onClick={saveNickname}
+                  disabled={savingNickname || !nickname.trim()}
+                  className="btn-secondary text-xs px-3"
+                >
+                  保存
+                </button>
+              </div>
             </div>
 
             {/* Upload */}

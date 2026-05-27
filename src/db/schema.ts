@@ -39,6 +39,8 @@ export const expenses = sqliteTable('expenses', {
   user_id: text('user_id').references(() => users.id),
   group_id: text('group_id').references(() => groups.id),
   payer_id: text('payer_id').references(() => users.id),
+  source_type: text('source_type').default('personal'), // 'personal' | 'group' | 'owe'
+  source_expense_id: text('source_expense_id').$type<string | null>(),
   created_at: text('created_at').notNull(),
 })
 

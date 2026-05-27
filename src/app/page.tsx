@@ -6,8 +6,10 @@ import { useSession, signOut } from 'next-auth/react';
 import Calendar from './components/Calendar';
 import ExpenseForm from './components/ExpenseForm';
 import ExpenseList from './components/ExpenseList';
+import GroupExpenseSection from './components/GroupExpenseSection';
 import AvatarPicker from './components/AvatarPicker';
 import { Expense, Profile, Group } from '@/types/expense';
+import { formatDate } from '@/utils/date';
 import AuthForm from './components/AuthForm';
 
 export default function Home() {
@@ -16,7 +18,6 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [userGroups, setUserGroups] = useState<Group[]>([]);
-  const [groupExpenses, setGroupExpenses] = useState<Expense[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -30,8 +31,7 @@ export default function Home() {
   useEffect(() => {
     if (session?.user?.id) {
       fetchProfile();
-      fetchGroups();
-      fetchExpenses();
+      fetchGroups().then(groupIds => fetchExpenses(groupIds));
     }
   }, [session?.user?.id]);
 
@@ -43,38 +43,59 @@ export default function Home() {
     }
   };
 
-  const fetchGroups = async () => {
+  const fetchGroups = async (): Promise<string[]> => {
     const res = await fetch('/api/groups');
-    if (!res.ok) return;
+    if (!res.ok) return [];
     const groups: Group[] = await res.json();
     setUserGroups(groups);
+    return groups.map(g => g.id);
+  };
 
-    if (groups.length > 0) {
-      const groupIds = groups.map(g => g.id);
-      const res2 = await fetch(`/api/expenses?groupIds=${groupIds.join(',')}`);
-      if (res2.ok) {
-        const data: Expense[] = await res2.json();
-        setGroupExpenses(data);
+  const fetchExpenses = async (groupIds?: string[]) => {
+    const personalRes = await fetch('/api/expenses');
+    let data: Expense[] = [];
+    if (personalRes.ok) {
+      data = await personalRes.json();
+    }
+    if (groupIds && groupIds.length > 0) {
+      const ids = groupIds.join(',');
+      const [groupRes, oweRes] = await Promise.all([
+        fetch(`/api/expenses?groupIds=${ids}`),
+        fetch(`/api/expenses?action=user-owes&groupIds=${ids}`),
+      ]);
+      if (groupRes.ok) {
+        const groupData: Expense[] = await groupRes.json();
+        const existingIds = new Set(data.map(e => e.id));
+        for (const e of groupData) {
+          if (!existingIds.has(e.id)) data.push(e);
+        }
+      }
+      if (oweRes.ok) {
+        const oweData: Expense[] = await oweRes.json();
+        const existingIds = new Set(data.map(e => e.id));
+        for (const e of oweData) {
+          if (!existingIds.has(e.id)) data.push(e);
+        }
       }
     }
+    setExpenses(data);
   };
 
-  const fetchExpenses = async () => {
-    const res = await fetch('/api/expenses');
-    if (res.ok) {
-      const data: Expense[] = await res.json();
-      setExpenses(data);
-    }
-  };
-
-  const handleAddExpense = (expense: Expense) => {
-    setExpenses(prev => [expense, ...prev]);
+  const updateExpense = (expense: Expense) => {
+    setExpenses(prev => {
+      const exists = prev.some(e => e.id === expense.id);
+      if (exists) {
+        return prev.map(e => e.id === expense.id ? expense : e);
+      }
+      return [expense, ...prev];
+    });
   };
 
   const handleDeleteExpense = async (id: string) => {
     const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
     if (res.ok) {
-      setExpenses(prev => prev.filter(e => e.id !== id));
+      const { deletedOweIds = [] } = await res.json();
+      setExpenses(prev => prev.filter(e => e.id !== id && !deletedOweIds.includes(e.id)));
     }
   };
 
@@ -84,6 +105,10 @@ export default function Home() {
 
   const handleAvatarUpdate = (url: string) => {
     setProfile(prev => prev ? { ...prev, avatar_url: url } : null);
+  };
+
+  const handleNicknameUpdate = (nickname: string) => {
+    setProfile(prev => prev ? { ...prev, nickname } : null);
   };
 
   if (status === 'loading') {
@@ -135,10 +160,12 @@ export default function Home() {
             <AvatarPicker
               userId={user.id}
               currentAvatar={profile?.avatar_url}
+              currentNickname={profile?.nickname}
               currentEmail={user.email || ''}
               onAvatarUpdate={handleAvatarUpdate}
+              onNicknameUpdate={handleNicknameUpdate}
             />
-            <span className="sidenote hidden md:inline">{user.email}</span>
+            <span className="sidenote hidden md:inline">{profile?.nickname || user.email}</span>
           </div>
           <button onClick={() => router.push('/groups')} className="btn-secondary">
             我的小组
@@ -152,48 +179,29 @@ export default function Home() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto p-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Calendar Section */}
+
+          {/* Left Column - Calendar + Group Expenses */}
           <div className="lg:col-span-5 fade-in stagger-1" style={{ animationFillMode: 'both' }}>
+            {/* Calendar */}
             <div className="paper-texture washi-border rounded-lg p-6" style={{ background: 'var(--color-warm-white)' }}>
               <Calendar
                 selectedDate={selectedDate}
                 onSelectDate={setSelectedDate}
                 expenses={expenses}
               />
-
-              {/* Group Expense Summary */}
-              {groupExpenses.length > 0 && (
-                <div className="mt-6 p-4 rounded-lg" style={{ background: 'var(--color-cream)' }}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-1 h-5 rounded-full" style={{ background: 'var(--color-sage)' }}></div>
-                    <h3 className="header-title text-base" style={{ color: 'var(--color-ink-light)' }}>小组消费</h3>
-                  </div>
-                  <div className="space-y-3 max-h-48 overflow-y-auto">
-                    {userGroups.map(group => {
-                      const groupTotal = groupExpenses
-                        .filter(e => e.group_id === group.id)
-                        .reduce((sum, e) => sum + e.amount, 0);
-                      return (
-                        <div key={group.id} className="flex justify-between items-center p-3 rounded-lg" style={{ background: 'var(--color-warm-white)' }}>
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm" style={{ background: 'var(--color-vermilion)' }}>
-                              {group.name[0]}
-                            </div>
-                            <span className="sidenote">{group.name}</span>
-                          </div>
-                          <span className="font-medium" style={{ color: 'var(--color-vermilion)' }}>
-                            ¥{groupTotal.toFixed(2)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
+
+            {/* Group Expense Section */}
+            <GroupExpenseSection
+              selectedDate={selectedDate}
+              userGroups={userGroups}
+              expenses={expenses}
+              onUpdate={updateExpense}
+              onDelete={handleDeleteExpense}
+            />
           </div>
 
-          {/* Form & List Section */}
+          {/* Right Column - Personal Expenses */}
           <div className="lg:col-span-7 fade-in stagger-2" style={{ animationFillMode: 'both' }}>
             <div className="paper-texture washi-border rounded-lg p-6" style={{ background: 'var(--color-warm-white)' }}>
               <div className="flex items-center gap-3 mb-6">
@@ -201,7 +209,7 @@ export default function Home() {
                 <h2 className="header-title text-xl" style={{ color: 'var(--color-ink)' }}>记一笔</h2>
               </div>
 
-              <ExpenseForm selectedDate={selectedDate} onAddExpense={handleAddExpense} />
+              <ExpenseForm selectedDate={selectedDate} onAddExpense={updateExpense} />
 
               <div className="mt-8 pt-6" style={{ borderTop: '1px dashed var(--color-paper)' }}>
                 <div className="flex items-center gap-3 mb-4">
@@ -209,7 +217,11 @@ export default function Home() {
                   <h3 className="header-title text-lg" style={{ color: 'var(--color-ink-light)' }}>今日记录</h3>
                 </div>
                 <div className="max-h-[250px] overflow-y-auto pr-2">
-                  <ExpenseList expenses={expenses} selectedDate={selectedDate} onDelete={handleDeleteExpense} />
+                  <ExpenseList
+                    expenses={expenses.filter(e => e.source_type === 'personal')}
+                    selectedDate={selectedDate}
+                    onDelete={handleDeleteExpense}
+                  />
                 </div>
               </div>
             </div>
@@ -225,12 +237,14 @@ export default function Home() {
                 {(() => {
                   const currentMonth = new Date().toISOString().slice(0, 7);
                   const monthExpenses = expenses.filter(e => e.date.startsWith(currentMonth));
-                  const income = monthExpenses.filter(e => e.amount > 0).reduce((sum, e) => sum + e.amount, 0);
-                  const expense = monthExpenses.filter(e => e.amount < 0).reduce((sum, e) => sum + e.amount, 0);
-                  const balance = income + expense;
+                  const income = monthExpenses.filter(e => e.amount > 0 && e.source_type === 'personal').reduce((sum, e) => sum + e.amount, 0);
+                  const totalExpense = monthExpenses
+                    .filter(e => e.amount < 0 && e.source_type === 'personal')
+                    .reduce((sum, e) => sum + e.amount, 0);
+                  const balance = income + totalExpense;
                   const values = [
                     Math.abs(income).toFixed(2),
-                    Math.abs(expense).toFixed(2),
+                    Math.abs(totalExpense).toFixed(2),
                     balance.toFixed(2)
                   ];
                   const colors = ['var(--color-sage)', 'var(--color-vermilion)', 'var(--color-gold)'];

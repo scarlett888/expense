@@ -57,12 +57,16 @@ export async function POST(req: NextRequest) {
       created_at: now,
     })
 
-    // Add creator as member
+    // Add creator as member — use their profile nickname, falling back to email prefix
+    const [profile] = await db.select().from(schema.profiles).where(eq(schema.profiles.user_id, userId));
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+    const creatorNickname = profile?.nickname || user?.email?.split('@')[0] || null;
+
     await db.insert(schema.group_members).values({
       id: randomUUID(),
       group_id: groupId,
       user_id: userId,
-      nickname: '我',
+      nickname: creatorNickname,
       created_at: now,
     })
 

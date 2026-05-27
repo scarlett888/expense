@@ -99,7 +99,7 @@ export default function GroupsPage() {
     const addRes = await fetch(`/api/groups/${selectedGroup.id}/members`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: foundUser.id, nickname: inviteEmail.split('@')[0] }),
+      body: JSON.stringify({ user_id: foundUser.id }),
     });
 
     if (addRes.ok) {
@@ -268,7 +268,7 @@ export default function GroupsPage() {
                         {member.user_email?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div>
-                        <p className="font-medium text-sm">{member.nickname || member.user_email?.split('@')[0]}</p>
+                        <p className="font-medium text-sm">{member.profile_nickname || member.nickname || member.user_email?.split('@')[0]}</p>
                         <p className="sidenote text-xs">{member.user_email}</p>
                       </div>
                     </div>
