@@ -7,6 +7,7 @@ import { Group, GroupMember } from '@/types/expense';
 
 interface MemberWithEmail extends GroupMember {
   user_email?: string;
+  is_owner?: boolean;
 }
 
 export default function GroupsPage() {
@@ -86,33 +87,19 @@ export default function GroupsPage() {
   const inviteMember = async () => {
     if (!inviteEmail.trim() || !selectedGroup) return;
 
-    // Find user by email
-    const res = await fetch(`/api/users/find?email=${encodeURIComponent(inviteEmail)}`);
-    const foundUser = await res.json();
-
-    if (!foundUser || !foundUser.id) {
-      alert('未找到该用户，请确认邮箱正确');
-      return;
-    }
-
-    // Add to group
-    const addRes = await fetch(`/api/groups/${selectedGroup.id}/members`, {
+    const res = await fetch(`/api/groups/${selectedGroup.id}/invitations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: foundUser.id }),
+      body: JSON.stringify({ email: inviteEmail }),
     });
 
-    if (addRes.ok) {
-      const membersRes = await fetch(`/api/groups/${selectedGroup.id}/members`);
-      if (membersRes.ok) {
-        const data: MemberWithEmail[] = await membersRes.json();
-        setGroupMembers(data);
-      }
+    if (res.ok) {
+      alert('邀请已发送');
       setInviteEmail('');
+      setSelectedGroup(null);
     } else {
-      const data = await addRes.json();
-      const msg = data.error || data.message || '未知错误';
-      alert('添加失败：' + msg);
+      const data = await res.json();
+      alert('邀请失败：' + (data.error || data.message || '未知错误'));
     }
   };
 
@@ -268,11 +255,17 @@ export default function GroupsPage() {
                         {member.user_email?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div>
-                        <p className="font-medium text-sm">{member.profile_nickname || member.nickname || member.user_email?.split('@')[0]}</p>
+                        <p className="font-medium text-sm">
+                          {member.profile_nickname || member.nickname || member.user_email?.split('@')[0]}
+                          {member.is_owner && <span className="ml-2 text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-sage)', color: 'white' }}>组长</span>}
+                        </p>
                         <p className="sidenote text-xs">{member.user_email}</p>
                       </div>
                     </div>
-                    {member.user_id !== userId && (
+                    {member.is_owner && (
+                      <span className="text-xs sidenote">组长</span>
+                    )}
+                    {!member.is_owner && selectedGroup.owner_id === userId && member.user_id !== userId && (
                       <button
                         onClick={() => removeMember(member.id)}
                         className="text-xs px-2 py-1 rounded hover:bg-red-50"
@@ -286,23 +279,25 @@ export default function GroupsPage() {
               </div>
             </div>
 
-            {/* Invite */}
-            <div className="mb-4">
-              <p className="sidenote mb-2">邀请新成员</p>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="输入邮箱地址"
-                  className="flex-1 py-2 text-sm"
-                  style={{ border: '2px solid var(--color-paper)' }}
-                />
-                <button onClick={inviteMember} className="btn-secondary text-sm">
-                  邀请
-                </button>
+            {/* Invite - Only owner can invite */}
+            {selectedGroup.owner_id === userId && (
+              <div className="mb-4">
+                <p className="sidenote mb-2">邀请新成员（需对方同意）</p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    placeholder="输入邮箱地址"
+                    className="flex-1 py-2 text-sm"
+                    style={{ border: '2px solid var(--color-paper)' }}
+                  />
+                  <button onClick={inviteMember} className="btn-secondary text-sm">
+                    邀请
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             <button onClick={deleteGroup} className="w-full py-2 text-sm rounded-lg" style={{ color: 'var(--color-vermilion)', background: 'rgba(197, 61, 67, 0.1)' }}>
               删除小组

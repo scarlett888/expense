@@ -30,9 +30,11 @@ export default function GroupExpenseSection({
   const [members, setMembers] = useState<MemberWithEmail[]>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [amount, setAmount] = useState('');
+  const [excludedAmount, setExcludedAmount] = useState('');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [showOweList, setShowOweList] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const userId = session?.user?.id;
 
   const fetchMembers = useCallback(async (groupId: string) => {
@@ -90,6 +92,7 @@ export default function GroupExpenseSection({
         note,
         group_id: selectedGroupId,
         memberIds: selectedMemberIds,
+        excluded_amount: excludedAmount ? parseFloat(excludedAmount) : undefined,
       }),
     });
 
@@ -239,6 +242,34 @@ export default function GroupExpenseSection({
               className="w-full py-2 px-3 text-sm rounded-lg"
               style={{ border: '2px solid var(--color-paper)', background: 'var(--color-warm-white)' }}
             />
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full text-xs py-1 rounded transition-colors"
+              style={{ color: 'var(--color-ink-light)' }}
+            >
+              {showAdvanced ? '收起高级选项' : '高级选项 >'}
+            </button>
+            {showAdvanced && (
+              <div className="p-3 rounded-lg" style={{ background: 'var(--color-cream)' }}>
+                <label className="sidenote text-xs mb-1 block" style={{ color: 'var(--color-ink-light)' }}>
+                  排除金额（不参与分摊，如单独打包的菜品）
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--color-vermilion)' }}>¥</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={excludedAmount}
+                    onChange={e => setExcludedAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="flex-1 py-1.5 px-2 text-sm rounded-lg"
+                    style={{ border: '2px solid var(--color-paper)', background: 'var(--color-warm-white)' }}
+                  />
+                </div>
+              </div>
+            )}
             <button
               type="submit"
               disabled={loading || !amount}

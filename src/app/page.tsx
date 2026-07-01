@@ -8,6 +8,7 @@ import ExpenseForm from './components/ExpenseForm';
 import ExpenseList from './components/ExpenseList';
 import GroupExpenseSection from './components/GroupExpenseSection';
 import AvatarPicker from './components/AvatarPicker';
+import NotificationCenter from './components/NotificationCenter';
 import { Expense, Profile, Group } from '@/types/expense';
 import { formatDate } from '@/utils/date';
 import AuthForm from './components/AuthForm';
@@ -91,6 +92,11 @@ export default function Home() {
     });
   };
 
+  const handleExpensesRefresh = () => {
+    // Refresh expenses from server (used by NotificationCenter after accepting split)
+    fetchGroups().then(groupIds => fetchExpenses(groupIds));
+  };
+
   const handleDeleteExpense = async (id: string) => {
     const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
     if (res.ok) {
@@ -157,6 +163,7 @@ export default function Home() {
 
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
+            <NotificationCenter onExpensesUpdate={handleExpensesRefresh} />
             <AvatarPicker
               userId={user.id}
               currentAvatar={profile?.avatar_url}

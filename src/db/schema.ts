@@ -1,4 +1,4 @@
-import { sqliteTable, text, real } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, real, integer } from 'drizzle-orm/sqlite-core'
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -19,6 +19,7 @@ export const profiles = sqliteTable('profiles', {
 export const groups = sqliteTable('groups', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  owner_id: text('owner_id').notNull().references(() => users.id),
   created_by: text('created_by').notNull().references(() => users.id),
   created_at: text('created_at').notNull(),
 })
@@ -49,5 +50,38 @@ export const expense_splits = sqliteTable('expense_splits', {
   expense_id: text('expense_id').notNull().references(() => expenses.id),
   user_id: text('user_id').notNull().references(() => users.id),
   amount: real('amount').notNull(),
+  status: text('status').default('pending'), // 'pending' | 'accepted' | 'rejected'
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at'),
+})
+
+export const notifications = sqliteTable('notifications', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull().references(() => users.id),
+  type: text('type').notNull(), // 'split_bill' | 'settlement' | 'group_invite'
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  related_expense_id: text('related_expense_id').references(() => expenses.id),
+  related_invitation_id: text('related_invitation_id').$type<string | null>(),
+  read: integer('read').default(0),
+  created_at: text('created_at').notNull(),
+})
+
+export const group_invitations = sqliteTable('group_invitations', {
+  id: text('id').primaryKey(),
+  group_id: text('group_id').notNull().references(() => groups.id),
+  inviter_id: text('inviter_id').notNull().references(() => users.id),
+  invitee_id: text('invitee_id').notNull().references(() => users.id),
+  status: text('status').default('pending'), // 'pending' | 'accepted' | 'rejected'
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at'),
+})
+
+export const lark_bindings = sqliteTable('lark_bindings', {
+  id: text('id').primaryKey(),
+  user_id: text('user_id').notNull().references(() => users.id),
+  lark_open_id: text('lark_open_id').notNull(),
+  lark_union_id: text('lark_union_id'),
+  lark_email: text('lark_email'),
   created_at: text('created_at').notNull(),
 })

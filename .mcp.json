@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "expense-book": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp/index.ts"],
+      "cwd": "/Users/fy/claudeProject/expense-book",
+      "env": {
+        "MCP_USER_EMAIL": "329487984@qq.com"
+      }
+    }
+  }
+}

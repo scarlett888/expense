@@ -14,6 +14,7 @@ export interface Expense {
 export interface Group {
   id: string;
   name: string;
+  owner_id: string;
   created_by: string;
   created_at: string;
 }
@@ -27,6 +28,8 @@ export interface GroupMember {
   // Joined fields
   user_email?: string;
   profile_nickname?: string | null;
+  // Ownership
+  is_owner?: boolean;
 }
 
 export interface ExpenseSplit {

@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     await db.insert(schema.groups).values({
       id: groupId,
       name: name.trim(),
+      owner_id: userId,
       created_by: userId,
       created_at: now,
     })
